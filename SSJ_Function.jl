@@ -486,6 +486,83 @@ function aggregate_consumption(D, c_policy)
 end
 
 """
+    backward_policy_path(r_path, w_path, ss, params)
+
+Purpose: Solve household policies backward along a price path.
+Inputs: price paths, steady-state terminal object, and KS parameters.
+Output: vectors of asset and consumption policy matrices.
+"""
+function backward_policy_path(r_path, w_path, ss, params)
+    T = length(r_path)
+    Va_next = ss.Va
+    a_policies = Vector{Matrix{Float64}}(undef, T)
+    c_policies = Vector{Matrix{Float64}}(undef, T)
+
+    for t in T:-1:1
+        Va, a_policy, c_policy = egm_step(
+            Va_next, ss.a_grid, ss.e_grid, ss.Pi,
+            r_path[t], w_path[t], ss.beta, params.eis
+        )
+        a_policies[t] = a_policy
+        c_policies[t] = c_policy
+        Va_next = Va
+    end
+
+    return (; a_policies, c_policies)
+end
+
+"""
+    expectation_step(E, a_policy, a_grid, Pi)
+
+Purpose: Apply the transpose of the distribution transition operator to a household object.
+Inputs: household object `E`, asset policy, asset grid, and income transition matrix.
+Output: expected next-period object conditional on today's state.
+"""
+function expectation_step(E, a_policy, a_grid, Pi)
+    nE, nA = size(E)
+    Enext = zeros(nE, nA)
+
+    for ie in 1:nE, ia in 1:nA
+        ap = clamp(a_policy[ie, ia], a_grid[1], a_grid[end])
+        j = searchsortedlast(a_grid, ap)
+        if j >= nA
+            j = nA - 1
+            weight = 1.0
+        else
+            weight = (ap - a_grid[j]) / (a_grid[j+1] - a_grid[j])
+        end
+
+        val = 0.0
+        for iep in 1:nE
+            val += Pi[ie, iep] * ((1 - weight) * E[iep, j] + weight * E[iep, j+1])
+        end
+        Enext[ie, ia] = val
+    end
+
+    return Enext
+end
+
+"""
+    recover_fake_news_jacobian(first_row, first_col, F)
+
+Purpose: Recover a full Jacobian from the first row, first column, and fake-news matrix.
+Inputs: first row, first column, and shifted-index fake-news matrix.
+Output: full sequence-space Jacobian.
+"""
+function recover_fake_news_jacobian(first_row, first_col, F)
+    T = length(first_row)
+    J = zeros(T, T)
+    J[1, :] .= first_row
+    J[:, 1] .= first_col
+
+    for t in 2:T, s in 2:T
+        J[t, s] = J[t-1, s-1] + F[t-1, s-1]
+    end
+
+    return J
+end
+
+"""
     household_steady_state(beta, r, w, params, a_grid, e_grid, Pi)
 
 Purpose: Solve the stationary household block at fixed prices.
