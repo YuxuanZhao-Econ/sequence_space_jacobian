@@ -1,45 +1,139 @@
-﻿# Sequence-Space Jacobian in Julia
+# Sequence-Space Jacobian in Julia
 
-This repository contains Julia notebooks for learning the Sequence-Space Jacobian (SSJ) method from the ground up. The goal is not to provide the fastest implementation, but to make the algorithm transparent: model equations, DAG blocks, residual maps, Jacobians, impulse responses, news shocks, and nonlinear perfect-foresight transitions are all written out explicitly.
+This repository contains Julia notebooks for learning the Sequence-Space Jacobian (SSJ) method from the ground up.
 
-## Contents
+The goal is transparency rather than speed. The notebooks write out the model blocks, DAG structure, residual maps, Jacobians, impulse responses, news shocks, heterogeneous-agent transition paths, and the fake news algorithm explicitly.
+
+## Repository Structure
 
 - `RBC.ipynb`
 
-  A representative-agent RBC model solved with a minimal SSJ implementation. The notebook covers steady state computation, DAG construction, sequence-space residuals, finite-difference Jacobians, general-equilibrium responses, and TFP shock experiments.
+  A representative-agent RBC model solved with a minimal SSJ implementation. It covers steady state computation, DAG construction, sequence-space residuals, finite-difference Jacobians, general-equilibrium Jacobians, and impulse responses to TFP shocks.
 
 - `KS1998.ipynb`
 
-  A Krusell-Smith style heterogeneous-agent model with idiosyncratic income risk. The notebook uses EGM for the household problem, distribution iteration for aggregation, and SSJ methods to compute transition dynamics and impulse responses.
+  A Krusell-Smith style heterogeneous-agent model with idiosyncratic income risk. It solves the household problem with EGM, updates the cross-sectional distribution by lottery-based forward iteration, computes block-level SSJ objects, and studies linearized transition dynamics.
 
 - `SSJ_Function.jl`
 
-  Shared helper routines used by the notebooks, including finite-difference Jacobians, Newton solving, DAG visualization, Rouwenhorst discretization, EGM, distribution iteration, and steady-state tools.
+  Shared helper routines for the notebooks, including finite-difference Jacobians, Newton solving, DAG visualization, Rouwenhorst discretization, EGM, distribution iteration, KS steady-state tools, and fake-news helper functions.
+
+## What Is Implemented
+
+### RBC Notebook
+
+- Deterministic steady state.
+- Sequence-space residual system.
+- Finite-difference construction of `H_U` and `H_Z`.
+- General-equilibrium Jacobian
+
+  $$
+  G^{U,Z}=-H_U^{-1}H_Z.
+  $$
+
+- Recovery of variable-level Jacobians by the DAG chain rule.
+- TFP shock and news shock impulse responses.
+
+### KS1998 Notebook
+
+- Deterministic Aiyagari steady state for the KS household block.
+- Firm block mapping aggregate capital and TFP into prices:
+
+  $$
+  (K^+,Z)\mapsto (r,w,Y).
+  $$
+
+- Household transition block mapping price paths into aggregate assets, consumption, and distribution paths:
+
+  $$
+  (r,w,D_0)\mapsto (A,C,\{D_t\}).
+  $$
+
+- Block-level DAG composition:
+
+  $$
+  H(K^+,Z)=A(r(K^+,Z),w(K^+,Z))-K^+.
+  $$
+
+- General-equilibrium response:
+
+  $$
+  G^{K^+,Z}=-H_K^{-1}H_Z.
+  $$
+
+- Recovery of aggregate responses such as
+
+  $$
+  G^{C,Z},\quad G^{A,Z},\quad G^{r,Z},\quad G^{w,Z},\quad G^{Y,Z}.
+  $$
+
+- Linear IRFs for persistent TFP shocks.
+- News shock experiments.
+- Nonlinear perfect-foresight transition diagnostics.
+- Terminal distribution diagnostic:
+
+  $$
+  \|D_T-D_{ss}\|_\infty.
+  $$
+
+- Fake news algorithm for household partial-equilibrium Jacobians, compared against the direct finite-difference method.
 
 ## Method
 
-Both notebooks follow the same sequence-space logic:
+Both notebooks follow the same sequence-space logic.
 
-1. Represent the model as a DAG of economic blocks.
+1. Represent the economy as a directed acyclic graph of model blocks.
 2. Choose unknown sequences and target residuals.
-3. Build the reduced residual system
+3. Write equilibrium as
 
    $$
    H(U,Z)=0.
    $$
 
-4. Linearize around the steady state:
+4. Linearize around the deterministic steady state:
 
    $$
-   H_U dU + H_Z dZ = 0.
+   H_U dU+H_Z dZ=0.
    $$
 
-5. Solve for the equilibrium response of unknowns:
+5. Solve for the general-equilibrium response of the unknowns:
 
    $$
-   U_Z = -H_U^{-1}H_Z.
+   dU=G^{U,Z}dZ,\qquad G^{U,Z}=-H_U^{-1}H_Z.
    $$
 
-6. Recover the responses of other model variables by feeding the solved unknown paths back through the model blocks.
+6. Recover all other aggregate variables by applying the DAG chain rule.
 
+For heterogeneous-agent blocks, the notebook first uses a direct finite-difference method. It then implements the fake news algorithm, which recovers the full household Jacobian from the first row, first column, and fake-news matrix.
 
+## Interpretation
+
+The KS notebook implements first-order SSJ around a deterministic steady state. The aggregate shock path is treated as a perfect-foresight transition path when solving the household block.
+
+This is appropriate for local IRFs and local comparative dynamics. It should not be interpreted as a full stochastic stationary KS economy with aggregate risk in the household state. In particular, first-order SSJ does not capture the precautionary saving motive generated by aggregate uncertainty itself.
+
+## Requirements
+
+The notebooks are written in Julia and use:
+
+- `LinearAlgebra`
+- `Plots`
+
+Run the notebooks from the repository root so that
+
+```julia
+include("SSJ_Function.jl")
+```
+
+loads the shared helper functions correctly.
+
+## To Be Continued
+
+- Second-order SSJ to capture the precautionary saving motive generated by aggregate risk.
+- Global sequence-space methods to capture the stochastic stationary economy in Krusell and Smith (1998).
+
+## Reference
+
+Krusell, P. and Smith, A. A. Jr. (1998). Income and wealth heterogeneity in the macroeconomy. Journal of Political Economy, 106(5), 867-896.
+
+Auclert, A., Bardoczy, B., Rognlie, M., and Straub, L. (2021). Using the sequence-space Jacobian to solve and estimate heterogeneous-agent models. Econometrica, 89(5), 2375-2408.
